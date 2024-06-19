@@ -259,7 +259,9 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 const getCurrentUser = asyncHandler(async (req, res) => {
     return res
         .status(200)
-        .json(new ApiResponse( 200, req.user, "current user fetched successfully"));
+        .json(
+            new ApiResponse(200, req.user, "current user fetched successfully")
+        );
 });
 
 const updateAccountDetails = asyncHandler(async (req, res) => {
@@ -306,11 +308,9 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
         { new: true }
     ).select("-password");
 
-    return res.status(200)
-    .json(
-        new ApiResponse(200, user, "Avatar Image updated Successfully")
-    )
-
+    return res
+        .status(200)
+        .json(new ApiResponse(200, user, "Avatar Image updated Successfully"));
 });
 
 const updateUserCoverImage = asyncHandler(async (req, res) => {
@@ -320,7 +320,8 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
 
     const cover = await uploadOnCloudinary(coverImageLocalPath);
 
-    if (!cover.url) throw new ApiError(400, "Error while uploading cover image");
+    if (!cover.url)
+        throw new ApiError(400, "Error while uploading cover image");
 
     const user = await User.findByIdAndUpdate(
         req.user?._id,
@@ -332,11 +333,92 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
         { new: true }
     ).select("-password");
 
-    return res.status(200)
-    .json(
-        new ApiResponse(200, user, "Cover Image updated Successfully")
-    )
+    return res
+        .status(200)
+        .json(new ApiResponse(200, user, "Cover Image updated Successfully"));
+});
 
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+    const { username } = req.params;
+
+    if (!username?.trim()) {
+        throw new ApiError(400, "username is missing");
+    }
+
+    // MongoDB aggregation pipeline to fetch user channel details
+    const channel = await User.aggregate([
+        {
+            // $match is used to filter documents that match the given criteria.
+            $match: {
+                username: username?.toLowerCase(),
+            },
+        },
+        {
+            // $lookup performs a join to another collection in the same database to filter in documents from the "joined" collection for processing.
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "channel",
+                as: "subscribers",
+            },
+        },
+        {
+            // Another $lookup to fetch data on what channels the user is subscribed to.
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "subscriber",
+                as: "subscribedTo",
+            },
+        },
+        {
+            // $addFields adds new fields to documents. Here, it adds counts and a boolean flag.
+            $addFields: {
+                subscribersCount: {
+                    // $size returns the total number of items in an array.
+                    $size: "$subscribers",
+                },
+                channeIsSubscribedToCount: {
+                    $size: "$subscribedTo",
+                },
+                isSubscribed: {
+                    // $cond performs a conditional check returning one value if true, another if false.
+                    $cond: {
+                        if: { $in: [req.user?._id, "subscribers.subscriber"] }, // $in returns a boolean indicating whether a specified value is in an array.
+                        then: true,
+                        else: false,
+                    },
+                },
+            },
+        },
+        {
+            // $project is used to select some specific fields to be included in the result.
+            $project: {
+                fullName: 1,
+                username: 1,
+                subscribersCount: 1,
+                channeIsSubscribedToCount: 1,
+                isSubscribed: 1,
+                avatar: 1,
+                coverImage: 1,
+                email: 1,
+            },
+        },
+    ]);
+
+    if (!channel?.length) {
+        throw new ApiError(404, "Channel does not exist");
+    }
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                channel[0],
+                "User Channel fetched successfully"
+            )
+        );
 });
 
 export {
@@ -349,4 +431,5 @@ export {
     updateAccountDetails,
     updateUserAvatar,
     updateUserCoverImage,
+    getUserChannelProfile,
 };
