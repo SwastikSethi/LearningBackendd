@@ -444,6 +444,8 @@ const getWatchHistory = asyncHandler(async (req, res) => {
                 foreignField: "_id",
                 as: "watchHistory",
                 // subpipelines
+                // for finding the info about the owner of videos
+                // the info is projected in owner field only
                 pipeline: [
                     {
                         $lookup: {
@@ -462,6 +464,7 @@ const getWatchHistory = asyncHandler(async (req, res) => {
                             ],
                         },
                     },
+                    // optional pipeline for returning values directly instead of of array with values as first element
                     {
                         $addFields: {
                             owner: {
