@@ -38,6 +38,55 @@ const createPlaylist = asyncHandler(async (req, res) => {
 const getUserPlaylists = asyncHandler(async (req, res) => {
     const { userId } = req.params;
     //TODO: get user playlists
+    if (!isValidObjectId(userId)) {
+        throw new ApiError(400, "Invalid userId");
+    }
+
+    const playlists = await Playlist.aggregate([
+        {
+            $match: {
+                owner: new mongoose.Types.ObjectId(userId),
+            },
+        },
+        {
+            $lookup: {
+                from: "videos",
+                localField: "videos",
+                foreignField: "_id",
+                as: "videos",
+            },
+        },
+        {
+            $addFields: {
+                totalVideos: {
+                    $size: "$videos",
+                },
+                totalViews: {
+                    $sum: "$videos.views",
+                },
+            },
+        },
+        {
+            $project: {
+                _id: 1,
+                name: 1,
+                description: 1,
+                totalVideos: 1,
+                totalViews: 1,
+                updatedAt: 1,
+            },
+        },
+    ]);
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                playlists,
+                "User playlists fetched successfully"
+            )
+        );
 });
 
 const getPlaylistById = asyncHandler(async (req, res) => {
@@ -66,10 +115,10 @@ const addVideoToPlaylist = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Video id is invalid");
     }
 
-    const playlist = await Playlist.findById(playlistId)
+    const playlist = await Playlist.findById(playlistId);
 
-    if(playlist?.owner.toString() != req.user?._id.toString()){
-        throw new ApiError(400, "only owner can add video to playlist")
+    if (playlist?.owner.toString() != req.user?._id.toString()) {
+        throw new ApiError(400, "only owner can add video to playlist");
     }
 
     const addVideo = await Playlist.updateOne(
@@ -105,10 +154,10 @@ const removeVideoFromPlaylist = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Video id is invalid");
     }
 
-    const playlist = await Playlist.findById(playlistId)
+    const playlist = await Playlist.findById(playlistId);
 
-    if(playlist?.owner.toString() != req.user?._id.toString()){
-        throw new ApiError(400, "only owner can delete playlist")
+    if (playlist?.owner.toString() != req.user?._id.toString()) {
+        throw new ApiError(400, "only owner can delete playlist");
     }
 
     const removeVideo = await Playlist.updateOne(
@@ -160,23 +209,23 @@ const updatePlaylist = asyncHandler(async (req, res) => {
     if (!isValidObjectId(playlistId)) {
         throw new ApiError(404, "Playlist id is invalid");
     }
-    
+
     const playlist = await Playlist.findById(playlistId);
 
-    if(playlist?.owner.toString() != req.user?._id.toString()){
-        throw new ApiError(400, "only owner can update playlist")
+    if (playlist?.owner.toString() != req.user?._id.toString()) {
+        throw new ApiError(400, "only owner can update playlist");
     }
 
     const Oldname = playlist.name;
     const Olddescription = playlist.description;
-    if(!name && !description){
+    if (!name && !description) {
         throw new ApiError(404, "Both fields can't be empty");
     }
-    if(!name) {
-        name = Oldname
+    if (!name) {
+        name = Oldname;
     }
-    if(!description) {
-        description = Olddescription
+    if (!description) {
+        description = Olddescription;
     }
 
     const updatedplaylist = await Playlist.findByIdAndUpdate(playlistId, {
@@ -186,14 +235,17 @@ const updatePlaylist = asyncHandler(async (req, res) => {
         },
     });
 
-    if(!updatedplaylist){
-        throw new ApiError(500, "Something went wrong while updating playlist details")
+    if (!updatedplaylist) {
+        throw new ApiError(
+            500,
+            "Something went wrong while updating playlist details"
+        );
     }
 
-    return res.status(200).json(200, updatedplaylist, "Playlist updated Successfully")
-
+    return res
+        .status(200)
+        .json(200, updatedplaylist, "Playlist updated Successfully");
 });
-
 
 export {
     createPlaylist,
